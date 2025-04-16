@@ -1,0 +1,118 @@
+# Docker Compose 파일 버전
+version: "3.8"
+
+# 모든 컨테이너가 data_network라는 가상 네트워크에 연결됨
+# 이 네트워크 덕분에 컨테이너끼리 서비스 이름으로 통신 가능해짐
+networks:
+  data_network:
+
+# Kafka는 데이터를 디스크에 저장하기 때문에 이 저장 공간을 컨테이너 밖(local)에 마련
+# 각 브로커마다 독립된 저장소를 가짐 -> 컨테이너 삭제/재시작해도 데이터는 유지됨
+volumes:
+  DataVolume00:
+    driver: local
+  DataVolume01:
+    driver: local
+  DataVolume02:
+    driver: local
+
+services:
+  Broker00:
+    # Kafka 이미지 - Bitnami에서 제공하는 Kafka 3.5.1 버전 (Zookeeper 없는 KRaft 모드)
+    image: bitnami/kafka:3.5.1-debian-11-r44
+    container_name: BrokerContainer00
+    # 컨테이너가 비정상 종료되면 자동 재시작되지만, 수동으로 docker stop 하면 재시작 X
+    restart: unless-stopped
+    # 호스트 포트(외부에서 Kafka 접속시) 10000 : EXTERNAL 리스너 포트 9094
+    ports:
+      - "10000:9094"
+    environment:
+      - KAFKA_CFG_BROKER_ID=0 # Kafka 클러스터 내에서의 브로커 식별자 (0번 브로커)
+      - KAFKA_CFG_NODE_ID=0 # BROKER_ID, NODE_ID는 KRaft에서는 동일하게 사용함
+      - KAFKA_KRAFT_CLUSTER_ID=eAJw2DkAQsSlgxm92vgA6Q== # KRaft 모드에서 사용되는 클러스터 고유 ID (Base64 인코딩된 UUID)
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@Broker00:9093,1@Broker01:9093,2@Broker02:9093 # Kafka 컨트롤러 선출 투표 대상 목록 (컨트롤러 리스너 포트 사용)
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker # 이 브로커가 컨트롤러 + 메시지 처리 브로커 역할 모두 수행
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER # 컨트롤러로 통신할 리스너 이름을 CONTROLLER로 지정
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094 # 컨테이너 내부에서 Kafka가 대기할 포트 3개 정의 - 9092(내부통신), 9093(컨트롤러 간 통신), 9094(외부 클라이언트가 접근할 포트)
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://Broker00:9092,EXTERNAL://127.0.0.1:10000 # 클라이언트가 Kafka에 접속할 때 알려주는 주소
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT # 각 리스터네 대해 보안 프로토콜을 PLAINTEXT로 지정
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false # 토픽이 없을 경우, 자동으로 생성되지 않도록 설정
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2 # 내부 메타데이터 토픽(__consumer_offsets, __transaction_state)의 복제 설정 - 적어도 2개 브로커가 살아있어야 정상 동작
+      - ALLOW_PLAINTEXT_LISTENER=yes # 비암호화 통신 (SSL X)
+    networks:
+      - data_network
+    volumes:
+      - DataVolume00:/bitnami/kafka
+
+  Broker01:
+    image: bitnami/kafka:3.5.1-debian-11-r44
+    container_name: BrokerContainer01
+    restart: unless-stopped
+    ports:
+      - "10001:9094"
+    environment:
+      - KAFKA_CFG_BROKER_ID=1
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_KRAFT_CLUSTER_ID=eAJw2DkAQsSlgxm92vgA6Q==
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@Broker00:9093,1@Broker01:9093,2@Broker02:9093
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://Broker01:9092,EXTERNAL://127.0.0.1:10001
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - data_network
+    volumes:
+      - DataVolume01:/bitnami/kafka
+
+  Broker02:
+    image: bitnami/kafka:3.5.1-debian-11-r44
+    container_name: BrokerContainer02
+    restart: unless-stopped
+    ports:
+      - "10002:9094"
+    environment:
+      - KAFKA_CFG_BROKER_ID=2
+      - KAFKA_CFG_NODE_ID=2
+      - KAFKA_KRAFT_CLUSTER_ID=eAJw2DkAQsSlgxm92vgA6Q==
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@Broker00:9093,1@Broker01:9093,2@Broker02:9093
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://Broker02:9092,EXTERNAL://127.0.0.1:10002
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - data_network
+    volumes:
+      - DataVolume02:/bitnami/kafka
+
+  WebUI:
+    image: provectuslabs/kafka-ui:latest
+    container_name: KafkaWebUI
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=MyLocalKafkaCluster # UI에 표시될 클러스터 이름
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=Broker00:9092,Broker01:9092,Broker02:9092 # Kafka UI가 접근할 브로커들의 내부 주소 목록 (모두 data_network에서 접근 가능)
+      - DYNAMIC_CONFIG_ENABLED=true # Kafka UI에서 클러스터 동적 추가 허용
+      - KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED=true
+      - KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED=true # 토픽 생성이나 UI 조작 이벤트에 대한 감사 로깅 활성화
+    depends_on: # WebUI는 브로커들이 먼저 실행된 후에 시작되도록 설정
+      - Broker00
+      - Broker01
+      - Broker02
+    networks:
+      - data_network
