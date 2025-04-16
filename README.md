@@ -15,6 +15,7 @@
 
 ### ✅ Web Crawler 아키텍처
 
+[crawler 정리](https://github.com/hgene2452/web_crawler_study/blob/main/docs/crawler.md)
 - **Fetcher**: URL 요청 및 HTML 응답 수신
 - **Parser**: HTML 문서에서 제목, 본문 등 데이터 추출
 - **Frontier**: 수집할 URL을 관리하는 큐 역할
@@ -22,6 +23,7 @@
 
 ### ✅ Kafka 클러스터 & Producer 이해
 
+[kafka 정리](https://github.com/hgene2452/web_crawler_study/blob/main/docs/kafka.md)
 - Kafka 클러스터 구성 (다중 브로커 포함)
 - Kafka Python 라이브러리 사용 (`kafka-python`)
 - `KafkaProducer` 객체로 메시지 직렬화 후 전송
