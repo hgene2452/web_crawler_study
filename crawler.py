@@ -3,9 +3,12 @@ from parser import Parser
 from url_filter import URLFilter
 from frontier import URLFrontier
 from bs4 import BeautifulSoup
+from datetime import datetime
+from producer import producer
 import json
 
 START_URL = "https://www.mk.co.kr/news/economy/"
+TOPIC_URL = "test-crawling-topic"
 
 # 기사 URL 확인 조건
 def is_article_url(url):
@@ -52,8 +55,6 @@ def run():
 
     print(f"탐색 대상 기사 수: {len(frontier.queue)}")
 
-    results = []
-
     # 기사 페이지 크롤링
     while not frontier.is_empty():
         url = frontier.get_next_url()
@@ -69,17 +70,28 @@ def run():
             continue
 
         article = extract_article_content(article_html)
-        
-        # 전체 기사 딕셔너리(json) 형식으로 수집
-        results.append({
+
+        # Kafka에 전송할 데이터 형식
+        article_data = {
             "title": article['title'],
-            "content": article['body']
-        })
-    
-    with open("mk_articles.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    
-    print("\n모든 기사 정보를 mk_articles.json 파일에 저장 완료!")
+            "content": article['body'],
+            "url": url,
+            "crawled_at": datetime.utcnow().isoformat()
+        }
+        
+        # Kafka로 전송
+        print(f"Kafka로 전송 중: {article_data['title']}")
+        future = producer.send(TOPIC_URL, value=article_data)
+
+        # 결과 확인 (타임아웃 예외처리)
+        try:
+            result = future.get(timeout=10)
+            print("Kafka로 전송 완료: ", result)
+        except Exception as e:
+            print("Kafka로 전송 실패: ", e)
+
+    producer.flush() # 보내기 완료 기다림
+    producer.close() # 연결 종료
 
 if __name__ == "__main__":
     run()
